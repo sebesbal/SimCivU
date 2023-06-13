@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Splines;
 using UnityEngine.Tilemaps;
+using UnityEngine.UIElements;
 
 /// <summary>
 /// A simple example showing how to pass Spline data to the GPU using SplineComputeBufferScope.
@@ -30,6 +31,40 @@ public class RouteRenderer2 : MonoBehaviour
 
     [SerializeField]
     Vector2Int[] m_cells = new Vector2Int[] { new Vector2Int(0, 0) };
+    Vector2Int[] m_lastCells = null;
+    //private Vector2Int[] m_cells = new Vector2Int[] { new Vector2Int(0, 0), new Vector2Int(0, 1) };
+
+    [SerializeField]
+    public Vector2Int[] Cells2 { get { return m_cells; } set {
+            m_cells = value; updateSplineFromCells(); }
+    }
+
+    void OnValidate()
+    {
+        if (HasArrayChanged(m_cells, m_lastCells))
+        {
+            m_Dirty = true;
+            m_lastCells = (Vector2Int[])m_cells.Clone();
+        }
+    }
+
+    bool HasArrayChanged(Vector2Int[] a, Vector2Int[] b)
+    {
+        if (b == null || a.Length != b.Length)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < a.Length; ++i)
+        {
+            if (a[i] != b[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     Vector3 CellToWorld(Vector2 cell)
     {
@@ -159,23 +194,50 @@ public class RouteRenderer2 : MonoBehaviour
     }
 
     void Awake()
+    //void Start()
     {
-        //Debug.Log("Awake called");
+        Debug.Log("Start");
         m_TileMap = GetComponentInParent<Tilemap>();
-        if (m_TileMap != null && m_cells.Length > 0)
-        {
-            m_Spline = CellsToSpline4(m_cells);
-        }
-        else
-        {
-            m_Spline = GetComponent<SplineContainer>().Spline;
-        }
-
         // Set up the LineRenderer
         m_Line = GetComponent<LineRenderer>();
         m_Line.positionCount = m_Segments;
 
         m_GetPositionsKernel = m_ComputeShader.FindKernel("GetPositions");
+
+
+
+        // updateSplineFromCells();
+
+        m_Dirty = true;
+    }
+
+    void OnEnable()
+    {
+        m_lastCells = (Vector2Int[])m_cells.Clone();
+        Spline.Changed += OnSplineChanged;
+    }
+
+    void OnDisable()
+    {
+        Spline.Changed -= OnSplineChanged;
+    }
+
+    void OnSplineChanged(Spline spline, int knotIndex, SplineModification modificationType)
+    {
+        if (m_Spline == spline)
+            m_Dirty = true;
+    }
+
+    void OnDestroy()
+    {
+        m_PositionsBuffer?.Dispose();
+        m_SplineBuffers.Dispose();
+    }
+
+    void updateSplineFromCells()
+    {
+        m_Dirty = false;
+        m_Spline = CellsToSpline4(m_cells);
 
         // Set up the spline evaluation compute shader. We'll use SplineComputeBufferScope to simplify the process.
         // Note that SplineComputeBufferScope is optional, you can manage the Curve, Lengths, and Info properties
@@ -199,29 +261,12 @@ public class RouteRenderer2 : MonoBehaviour
         m_ComputeShader.SetBuffer(m_GetPositionsKernel, "positions", m_PositionsBuffer);
         m_ComputeShader.SetFloat("positionsCount", m_Segments);
 
-        m_Dirty = true;
-    }
+        m_ComputeShader.GetKernelThreadGroupSizes(m_GetPositionsKernel, out var threadSize, out _, out _);
+        m_ComputeShader.Dispatch(m_GetPositionsKernel, (int)threadSize, 1, 1);
+        m_PositionsBuffer.GetData(m_Positions);
 
-    void OnEnable()
-    {
-        Spline.Changed += OnSplineChanged;
-    }
-
-    void OnDisable()
-    {
-        Spline.Changed -= OnSplineChanged;
-    }
-
-    void OnSplineChanged(Spline spline, int knotIndex, SplineModification modificationType)
-    {
-        if (m_Spline == spline)
-            m_Dirty = true;
-    }
-
-    void OnDestroy()
-    {
-        m_PositionsBuffer?.Dispose();
-        m_SplineBuffers.Dispose();
+        m_Line.loop = m_Spline.Closed;
+        m_Line.SetPositions(m_Positions);
     }
 
     void Update()
@@ -230,17 +275,18 @@ public class RouteRenderer2 : MonoBehaviour
         if (!m_Dirty)
             return;
         m_Dirty = false;
+        updateSplineFromCells();
 
-        // Once initialized, call SplineComputeBufferScope.Upload() to update the GPU copies of spline data. This
-        // is only necessary here because we're constantly updating the Spline in this example. If the Spline is
-        // static, there is no need to call Upload every frame.
-        m_SplineBuffers.Upload();
+        //// Once initialized, call SplineComputeBufferScope.Upload() to update the GPU copies of spline data. This
+        //// is only necessary here because we're constantly updating the Spline in this example. If the Spline is
+        //// static, there is no need to call Upload every frame.
+        //m_SplineBuffers.Upload();
 
-        m_ComputeShader.GetKernelThreadGroupSizes(m_GetPositionsKernel, out var threadSize, out _, out _);
-        m_ComputeShader.Dispatch(m_GetPositionsKernel, (int)threadSize, 1, 1);
-        m_PositionsBuffer.GetData(m_Positions);
+        //m_ComputeShader.GetKernelThreadGroupSizes(m_GetPositionsKernel, out var threadSize, out _, out _);
+        //m_ComputeShader.Dispatch(m_GetPositionsKernel, (int)threadSize, 1, 1);
+        //m_PositionsBuffer.GetData(m_Positions);
 
-        m_Line.loop = m_Spline.Closed;
-        m_Line.SetPositions(m_Positions);
+        //m_Line.loop = m_Spline.Closed;
+        //m_Line.SetPositions(m_Positions);
     }
 }
