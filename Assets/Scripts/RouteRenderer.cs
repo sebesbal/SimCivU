@@ -22,7 +22,7 @@ public class RouteRenderer : MonoBehaviour
 
     bool m_Dirty = false;
     int m_GetPositionsKernel;
-    Tilemap m_TileMap;
+    Grid m_TileMap;
     Spline m_Spline;
     LineRenderer m_Line;
     SplineComputeBufferScope<Spline> m_SplineBuffers;
@@ -58,7 +58,7 @@ public class RouteRenderer : MonoBehaviour
 
     Vector3 CellToWorld(Vector2 cell)
     {
-        return m_TileMap.CellToWorld(new Vector3Int((int)cell.x, (int)cell.y)) + new Vector3(0, 1.0f, 0);
+        return m_TileMap.CellToWorld(new Vector3Int((int)cell.x, (int)cell.y)) + new Vector3(0, 0.1f, 0);
     }
 
     private Spline CellsToSpline(Vector2Int[] cellPositions)
@@ -99,8 +99,8 @@ public class RouteRenderer : MonoBehaviour
 
     void Awake()
     {
-        Debug.Log("Start");
-        m_TileMap = GetComponentInParent<Tilemap>();
+        transform.hideFlags = HideFlags.NotEditable | HideFlags.HideInInspector;
+        m_TileMap = GetComponentInParent<Grid>();
         m_Line = GetComponent<LineRenderer>();
         m_Line.positionCount = m_Segments;
         m_GetPositionsKernel = m_ComputeShader.FindKernel("GetPositions");
