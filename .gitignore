@@ -8,3 +8,7 @@
 /UserSettings
 /Assets/External
 *.vsconfig
+/Assets/Scripts/Engine/.vs
+/Assets/Scripts/Engine/bin
+/Assets/Scripts/Engine/obj
+/bin
